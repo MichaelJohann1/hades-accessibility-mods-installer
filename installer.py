@@ -17,11 +17,10 @@ import wx
 INSTALLER_VERSION = "1.1"
 
 # GitHub repo info
-MOD_REPO = "MichaelJohann1/hades-accessibility-mods"
-INSTALLER_REPO = "MichaelJohann1/hades-accessibility-mods-installer"
+GITHUB_REPO = "MichaelJohann1/hades-accessibility-mods"
 GITHUB_BRANCH = "main"
-GITHUB_RAW_BASE = f"https://raw.githubusercontent.com/{MOD_REPO}/{GITHUB_BRANCH}/"
-INSTALLER_API_RELEASES = f"https://api.github.com/repos/{INSTALLER_REPO}/releases"
+GITHUB_RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/"
+GITHUB_API_RELEASES = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
 
 # Files to download and install to x64 folder
 INSTALL_FILES = [
@@ -168,7 +167,7 @@ def check_for_installer_update():
     """
     try:
         req = urllib.request.Request(
-            INSTALLER_API_RELEASES,
+            GITHUB_API_RELEASES,
             headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "HadesAccessibilityInstaller"}
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
