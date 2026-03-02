@@ -1,0 +1,14 @@
+Hades Accessibility Mods Installer Changelog
+
+*Version 1.1: Released 03/02/2026
+Added automatic update checking. The installer now checks GitHub for newer installer versions on startup and offers to download them.
+Changed the readme and changelog save location from the desktop to the folder the installer is run from.
+Fixed NVDA speech not working (incorrect function names nvdaControllerClient64_speakText changed to nvdaController_speakText).
+
+*Version 1.0: Released 03/02/2026
+Initial release.
+Downloads and installs the Hades accessibility mod DLL files from GitHub.
+Automatically detects the Hades game directory via Steam registry entries.
+Optional readme and changelog saving.
+Copy Debug Log button for copying the accessibility log to clipboard.
+NVDA screen reader support for installer status messages.
