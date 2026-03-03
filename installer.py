@@ -1,5 +1,5 @@
 """
-Hades Accessibility Mods Installer v1.3
+Hades Accessibility Mods Installer v1.4
 Downloads the latest mod files from GitHub and installs them to the Hades game directory.
 """
 
@@ -11,10 +11,12 @@ import json
 import threading
 import winreg
 import string
+import zipfile
+import tempfile
 import wx
 
 # Installer version
-INSTALLER_VERSION = "1.3"
+INSTALLER_VERSION = "1.4"
 
 # GitHub repo info
 GITHUB_MOD_REPO = "MichaelJohann1/hades-accessibility-mods"
@@ -77,6 +79,8 @@ def get_latest_mod_release():
     """Get the latest mod release from GitHub.
     Returns (tag, assets_dict, body) or (None, None, None).
     assets_dict maps filename -> download_url.
+    The assets_dict may contain a special key '_zip_url' with the download URL
+    for a HadesAccessibilityMods*.zip asset if one exists.
     """
     try:
         req = urllib.request.Request(
@@ -93,7 +97,13 @@ def get_latest_mod_release():
                 continue
             assets = {}
             for asset in release.get("assets", []):
-                assets[asset["name"]] = asset["browser_download_url"]
+                name = asset["name"]
+                url = asset["browser_download_url"]
+                assets[name] = url
+                # Track zip asset specially
+                if name.lower().startswith("hadesaccessibilitymods") and name.lower().endswith(".zip"):
+                    assets["_zip_url"] = url
+                    assets["_zip_name"] = name
             body = release.get("body", "")
             return tag, assets, body
         return None, None, None
@@ -427,62 +437,146 @@ class InstallerFrame(wx.Frame):
             self.log("Warning: Could not find latest release. Downloading from main branch...")
 
         try:
-            # Download and install DLL files
-            for filename in INSTALL_FILES:
+            # Check if release has a zip file (new workflow)
+            zip_url = assets.get("_zip_url") if assets else None
+
+            if zip_url:
+                # Download and extract from zip
+                self.log("Downloading mod package...")
+                tmp_zip = None
                 try:
-                    self.log(f"Downloading {filename}...")
-                    dest = os.path.join(x64_dir, filename)
-                    if assets and filename in assets:
-                        download_url = assets[filename]
-                    else:
-                        download_url = GITHUB_RAW_BASE + filename
-                    urllib.request.urlretrieve(download_url, dest)
-                    copied += 1
-                    self.log(f"  {filename} installed.")
-                except PermissionError:
-                    msg = f"Permission denied writing {filename}. Is Hades running? Close the game and try again."
-                    errors.append(msg)
-                    self.log(f"  Error: {msg}")
+                    tmp_fd, tmp_zip = tempfile.mkstemp(suffix=".zip")
+                    os.close(tmp_fd)
+                    urllib.request.urlretrieve(zip_url, tmp_zip)
+                    self.log("  Download complete. Extracting files...")
+
+                    with zipfile.ZipFile(tmp_zip, "r") as zf:
+                        # Find files inside the zip (may be in a subfolder)
+                        zip_contents = zf.namelist()
+
+                        # Extract DLL files to x64 directory
+                        for filename in INSTALL_FILES:
+                            # Find the file in the zip (could be at root or in a subfolder)
+                            zip_path = self._find_in_zip(zip_contents, filename)
+                            if zip_path:
+                                try:
+                                    dest = os.path.join(x64_dir, filename)
+                                    with zf.open(zip_path) as src, open(dest, "wb") as dst:
+                                        dst.write(src.read())
+                                    copied += 1
+                                    self.log(f"  {filename} installed.")
+                                except PermissionError:
+                                    msg = f"Permission denied writing {filename}. Is Hades running? Close the game and try again."
+                                    errors.append(msg)
+                                    self.log(f"  Error: {msg}")
+                                except Exception as e:
+                                    msg = f"Error installing {filename}: {e}"
+                                    errors.append(msg)
+                                    self.log(f"  Error: {msg}")
+                            else:
+                                msg = f"{filename} not found in zip."
+                                errors.append(msg)
+                                self.log(f"  Warning: {msg}")
+
+                        # Save readme to installer folder if checked
+                        if self.readme_cb.GetValue():
+                            zip_path = self._find_in_zip(zip_contents, README_FILE)
+                            if zip_path:
+                                try:
+                                    dest = os.path.join(installer_dir, README_FILE)
+                                    with zf.open(zip_path) as src, open(dest, "wb") as dst:
+                                        dst.write(src.read())
+                                    self.log(f"  Readme saved to {installer_dir}")
+                                except Exception as e:
+                                    self.log(f"  Error saving readme: {e}")
+
+                        # Save changelog to installer folder if checked
+                        if self.changelog_cb.GetValue():
+                            zip_path = self._find_in_zip(zip_contents, CHANGELOG_FILE)
+                            if zip_path:
+                                try:
+                                    dest = os.path.join(installer_dir, CHANGELOG_FILE)
+                                    with zf.open(zip_path) as src, open(dest, "wb") as dst:
+                                        dst.write(src.read())
+                                    self.log(f"  Changelog saved to {installer_dir}")
+                                except Exception as e:
+                                    self.log(f"  Error saving changelog: {e}")
+
                 except urllib.error.URLError as e:
-                    msg = f"Failed to download {filename}: {e}"
+                    msg = f"Failed to download mod package: {e}"
+                    errors.append(msg)
+                    self.log(f"  Error: {msg}")
+                except zipfile.BadZipFile:
+                    msg = "Downloaded file is not a valid zip archive."
                     errors.append(msg)
                     self.log(f"  Error: {msg}")
                 except Exception as e:
-                    msg = f"Error installing {filename}: {e}"
+                    msg = f"Error extracting mod package: {e}"
                     errors.append(msg)
                     self.log(f"  Error: {msg}")
+                finally:
+                    if tmp_zip and os.path.isfile(tmp_zip):
+                        try:
+                            os.remove(tmp_zip)
+                        except Exception:
+                            pass
+            else:
+                # Fallback: download individual files (old workflow or main branch)
+                for filename in INSTALL_FILES:
+                    try:
+                        self.log(f"Downloading {filename}...")
+                        dest = os.path.join(x64_dir, filename)
+                        if assets and filename in assets:
+                            download_url = assets[filename]
+                        else:
+                            download_url = GITHUB_RAW_BASE + filename
+                        urllib.request.urlretrieve(download_url, dest)
+                        copied += 1
+                        self.log(f"  {filename} installed.")
+                    except PermissionError:
+                        msg = f"Permission denied writing {filename}. Is Hades running? Close the game and try again."
+                        errors.append(msg)
+                        self.log(f"  Error: {msg}")
+                    except urllib.error.URLError as e:
+                        msg = f"Failed to download {filename}: {e}"
+                        errors.append(msg)
+                        self.log(f"  Error: {msg}")
+                    except Exception as e:
+                        msg = f"Error installing {filename}: {e}"
+                        errors.append(msg)
+                        self.log(f"  Error: {msg}")
 
-            # Save readme to installer folder if checked
-            if self.readme_cb.GetValue():
-                try:
-                    self.log("Saving readme...")
-                    dest = os.path.join(installer_dir, README_FILE)
-                    if assets and README_FILE in assets:
-                        download_url = assets[README_FILE]
-                    else:
-                        download_url = GITHUB_RAW_BASE + README_FILE
-                    urllib.request.urlretrieve(download_url, dest)
-                    self.log(f"  Readme saved to {installer_dir}")
-                except Exception as e:
-                    msg = f"Failed to save readme: {e}"
-                    errors.append(msg)
-                    self.log(f"  Error: {msg}")
+                # Save readme to installer folder if checked
+                if self.readme_cb.GetValue():
+                    try:
+                        self.log("Saving readme...")
+                        dest = os.path.join(installer_dir, README_FILE)
+                        if assets and README_FILE in assets:
+                            download_url = assets[README_FILE]
+                        else:
+                            download_url = GITHUB_RAW_BASE + README_FILE
+                        urllib.request.urlretrieve(download_url, dest)
+                        self.log(f"  Readme saved to {installer_dir}")
+                    except Exception as e:
+                        msg = f"Failed to save readme: {e}"
+                        errors.append(msg)
+                        self.log(f"  Error: {msg}")
 
-            # Save changelog to installer folder if checked
-            if self.changelog_cb.GetValue():
-                try:
-                    self.log("Saving changelog...")
-                    dest = os.path.join(installer_dir, CHANGELOG_FILE)
-                    if assets and CHANGELOG_FILE in assets:
-                        download_url = assets[CHANGELOG_FILE]
-                    else:
-                        download_url = GITHUB_RAW_BASE + CHANGELOG_FILE
-                    urllib.request.urlretrieve(download_url, dest)
-                    self.log(f"  Changelog saved to {installer_dir}")
-                except Exception as e:
-                    msg = f"Failed to save changelog: {e}"
-                    errors.append(msg)
-                    self.log(f"  Error: {msg}")
+                # Save changelog to installer folder if checked
+                if self.changelog_cb.GetValue():
+                    try:
+                        self.log("Saving changelog...")
+                        dest = os.path.join(installer_dir, CHANGELOG_FILE)
+                        if assets and CHANGELOG_FILE in assets:
+                            download_url = assets[CHANGELOG_FILE]
+                        else:
+                            download_url = GITHUB_RAW_BASE + CHANGELOG_FILE
+                        urllib.request.urlretrieve(download_url, dest)
+                        self.log(f"  Changelog saved to {installer_dir}")
+                    except Exception as e:
+                        msg = f"Failed to save changelog: {e}"
+                        errors.append(msg)
+                        self.log(f"  Error: {msg}")
 
         except Exception as e:
             errors.append(f"Unexpected error: {e}")
@@ -501,6 +595,17 @@ class InstallerFrame(wx.Frame):
                     self.log(f"Installed version: {installed_tag}")
 
         wx.CallAfter(finish)
+
+    @staticmethod
+    def _find_in_zip(zip_contents, filename):
+        """Find a file in a zip archive, checking both root and subfolders."""
+        filename_lower = filename.lower()
+        for entry in zip_contents:
+            # Match exact filename at any folder depth
+            basename = entry.rsplit("/", 1)[-1] if "/" in entry else entry
+            if basename.lower() == filename_lower:
+                return entry
+        return None
 
     def on_open_debug_log_folder(self, event):
         if not self.installed:
