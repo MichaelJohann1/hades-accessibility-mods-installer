@@ -1,5 +1,8 @@
 Hades Accessibility Mods Installer Changelog
 
+*Version 1.2: Released 03/03/2026
+Replaced "Copy Debug Log" button with "Open Debug Log Folder" button. Debug logs are now stored in a logs subfolder with timestamped filenames, so opening the folder is more useful than copying a single file.
+
 *Version 1.1: Released 03/02/2026
 Added automatic update checking. The installer now checks GitHub for newer installer versions on startup and offers to download them.
 Changed the readme and changelog save location from the desktop to the folder the installer is run from.

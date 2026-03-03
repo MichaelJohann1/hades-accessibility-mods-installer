@@ -1,5 +1,5 @@
 """
-Hades Accessibility Mods Installer v1.1
+Hades Accessibility Mods Installer v1.2
 Downloads the latest mod files from GitHub and installs them to the Hades game directory.
 """
 
@@ -14,7 +14,7 @@ import string
 import wx
 
 # Installer version
-INSTALLER_VERSION = "1.1"
+INSTALLER_VERSION = "1.2"
 
 # GitHub repo info
 GITHUB_REPO = "MichaelJohann1/hades-accessibility-mods"
@@ -32,9 +32,6 @@ INSTALL_FILES = [
 # Extra files (for saving to installer folder)
 README_FILE = "readme.html"
 CHANGELOG_FILE = "changelog.txt"
-
-# Debug log filename (in game's x64 folder)
-DEBUG_LOG = "hades_accessibility.log"
 
 # Installer exe name on GitHub releases
 INSTALLER_EXE_NAME = "HadesAccessibilityInstaller.exe"
@@ -235,7 +232,7 @@ class InstallerFrame(wx.Frame):
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
         self.install_btn = wx.Button(panel, label="Install Hades Mods")
         btn_sizer.Add(self.install_btn, 0)
-        self.log_btn = wx.Button(panel, label="Copy Debug Log")
+        self.log_btn = wx.Button(panel, label="Open Debug Log Folder")
         self.log_btn.Disable()
         btn_sizer.Add(self.log_btn, 0, wx.LEFT, 5)
         self.exit_btn = wx.Button(panel, label="Exit")
@@ -252,7 +249,7 @@ class InstallerFrame(wx.Frame):
         # Bind events
         self.browse_btn.Bind(wx.EVT_BUTTON, self.on_browse)
         self.install_btn.Bind(wx.EVT_BUTTON, self.on_install)
-        self.log_btn.Bind(wx.EVT_BUTTON, self.on_copy_debug_log)
+        self.log_btn.Bind(wx.EVT_BUTTON, self.on_open_debug_log_folder)
         self.exit_btn.Bind(wx.EVT_BUTTON, self.on_exit)
 
         self.Centre()
@@ -375,28 +372,21 @@ class InstallerFrame(wx.Frame):
 
         wx.CallAfter(finish)
 
-    def on_copy_debug_log(self, event):
+    def on_open_debug_log_folder(self, event):
         if not self.installed:
             self.log("Error: Please install the mods first.")
             return
 
-        log_path = os.path.join(self.game_x64_dir, DEBUG_LOG)
-        if not os.path.isfile(log_path):
-            self.log("Debug log not found. Run Hades with the mods installed first to generate the log.")
+        logs_dir = os.path.join(self.game_x64_dir, "logs")
+        if not os.path.isdir(logs_dir):
+            self.log("Debug log folder not found. Run Hades with the mods installed first to generate logs.")
             return
 
         try:
-            with open(log_path, "r", encoding="utf-8", errors="replace") as f:
-                log_content = f.read()
-
-            if wx.TheClipboard.Open():
-                wx.TheClipboard.SetData(wx.TextDataObject(log_content))
-                wx.TheClipboard.Close()
-                self.log("Debug log copied to clipboard.")
-            else:
-                self.log("Error: Could not open clipboard.")
+            os.startfile(logs_dir)
+            self.log(f"Opened debug log folder: {logs_dir}")
         except Exception as e:
-            self.log(f"Error: Failed to read debug log: {e}")
+            self.log(f"Error: Failed to open log folder: {e}")
 
     def on_exit(self, event):
         self.Close()
