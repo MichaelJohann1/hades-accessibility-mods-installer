@@ -1,5 +1,10 @@
 Hades Accessibility Mods Installer Changelog
 
+*Version 1.3: Released 03/03/2026
+Mod files are now downloaded from GitHub releases instead of the main branch. This ensures you always get a tested, published version.
+Added mod update checking. When you open the installer, if a newer mod version is available it will show you the changelog and offer to install the update.
+Fixed installer self-update checking the wrong GitHub repository.
+
 *Version 1.2: Released 03/03/2026
 Replaced "Copy Debug Log" button with "Open Debug Log Folder" button. Debug logs are now stored in a logs subfolder with timestamped filenames, so opening the folder is more useful than copying a single file.
 

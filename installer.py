@@ -1,5 +1,5 @@
 """
-Hades Accessibility Mods Installer v1.2
+Hades Accessibility Mods Installer v1.3
 Downloads the latest mod files from GitHub and installs them to the Hades game directory.
 """
 
@@ -14,13 +14,15 @@ import string
 import wx
 
 # Installer version
-INSTALLER_VERSION = "1.2"
+INSTALLER_VERSION = "1.3"
 
 # GitHub repo info
-GITHUB_REPO = "MichaelJohann1/hades-accessibility-mods"
+GITHUB_MOD_REPO = "MichaelJohann1/hades-accessibility-mods"
+GITHUB_INSTALLER_REPO = "MichaelJohann1/hades-accessibility-mods-installer"
 GITHUB_BRANCH = "main"
-GITHUB_RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{GITHUB_BRANCH}/"
-GITHUB_API_RELEASES = f"https://api.github.com/repos/{GITHUB_REPO}/releases"
+GITHUB_RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_MOD_REPO}/{GITHUB_BRANCH}/"
+GITHUB_MOD_API_RELEASES = f"https://api.github.com/repos/{GITHUB_MOD_REPO}/releases"
+GITHUB_INSTALLER_API_RELEASES = f"https://api.github.com/repos/{GITHUB_INSTALLER_REPO}/releases"
 
 # Files to download and install to x64 folder
 INSTALL_FILES = [
@@ -35,6 +37,9 @@ CHANGELOG_FILE = "changelog.txt"
 
 # Installer exe name on GitHub releases
 INSTALLER_EXE_NAME = "HadesAccessibilityInstaller.exe"
+
+# Version tracking file in game's x64 directory
+VERSION_FILE = ".mod_version"
 
 
 def _load_nvda():
@@ -66,6 +71,64 @@ def nvda_speak(text):
             _nvda.nvdaController_speakText(text)
         except Exception:
             pass
+
+
+def get_latest_mod_release():
+    """Get the latest mod release from GitHub.
+    Returns (tag, assets_dict, body) or (None, None, None).
+    assets_dict maps filename -> download_url.
+    """
+    try:
+        req = urllib.request.Request(
+            GITHUB_MOD_API_RELEASES,
+            headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "HadesAccessibilityInstaller"}
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            releases = json.loads(resp.read().decode("utf-8"))
+
+        for release in releases:
+            tag = release.get("tag_name", "")
+            # Skip installer-tagged releases
+            if tag.startswith("installer-"):
+                continue
+            assets = {}
+            for asset in release.get("assets", []):
+                assets[asset["name"]] = asset["browser_download_url"]
+            body = release.get("body", "")
+            return tag, assets, body
+        return None, None, None
+    except Exception:
+        return None, None, None
+
+
+def get_installed_mod_version(x64_dir):
+    """Read the installed mod version from the game directory."""
+    version_file = os.path.join(x64_dir, VERSION_FILE)
+    try:
+        with open(version_file, "r") as f:
+            return f.read().strip()
+    except Exception:
+        return None
+
+
+def save_installed_mod_version(x64_dir, version):
+    """Save the installed mod version to the game directory."""
+    version_file = os.path.join(x64_dir, VERSION_FILE)
+    try:
+        with open(version_file, "w") as f:
+            f.write(version)
+    except Exception:
+        pass
+
+
+def _mod_version_newer(remote_tag, local_tag):
+    """Return True if remote mod version is newer than local."""
+    try:
+        remote = tuple(int(x) for x in remote_tag.lstrip("v").split("."))
+        local = tuple(int(x) for x in local_tag.lstrip("v").split("."))
+        return remote > local
+    except (ValueError, AttributeError):
+        return remote_tag != local_tag
 
 
 def find_steam_libraries():
@@ -164,7 +227,7 @@ def check_for_installer_update():
     """
     try:
         req = urllib.request.Request(
-            GITHUB_API_RELEASES,
+            GITHUB_INSTALLER_API_RELEASES,
             headers={"Accept": "application/vnd.github.v3+json", "User-Agent": "HadesAccessibilityInstaller"}
         )
         with urllib.request.urlopen(req, timeout=10) as resp:
@@ -173,7 +236,6 @@ def check_for_installer_update():
         for release in releases:
             tag = release.get("tag_name", "")
             # Only look at installer-tagged releases (e.g. "installer-1.2")
-            # Skip all other releases (mod releases like "v34", "v34.1.1", etc.)
             if not tag.startswith("installer-"):
                 continue
             remote_version = tag.replace("installer-", "", 1)
@@ -205,6 +267,7 @@ class InstallerFrame(wx.Frame):
         self.game_dir = find_game_directory()
         self.installed = False
         self.game_x64_dir = ""
+        self.latest_release = None  # (tag, assets, body) from get_latest_mod_release
 
         panel = wx.Panel(self)
         main_sizer = wx.BoxSizer(wx.VERTICAL)
@@ -253,6 +316,44 @@ class InstallerFrame(wx.Frame):
         self.exit_btn.Bind(wx.EVT_BUTTON, self.on_exit)
 
         self.Centre()
+
+        # Check for mod updates after frame is shown
+        wx.CallAfter(self._start_mod_update_check)
+
+    def _start_mod_update_check(self):
+        """Start checking for mod updates in a background thread."""
+        thread = threading.Thread(target=self._mod_update_check_thread, daemon=True)
+        thread.start()
+
+    def _mod_update_check_thread(self):
+        """Background thread: fetch latest release and check for updates."""
+        tag, assets, body = get_latest_mod_release()
+        if tag and assets:
+            self.latest_release = (tag, assets, body)
+        wx.CallAfter(self._show_mod_update_if_available, tag, body)
+
+    def _show_mod_update_if_available(self, tag, body):
+        """Show mod update dialog if a newer version is available."""
+        if not self.game_dir or not tag:
+            return
+
+        x64_dir = os.path.join(self.game_dir, "x64")
+        installed_version = get_installed_mod_version(x64_dir)
+        if not installed_version:
+            return  # First install, no update check needed
+
+        if not _mod_version_newer(tag, installed_version):
+            return  # Already up to date
+
+        msg = f"A new mod version is available: {tag}\nYou currently have: {installed_version}\n"
+        if body:
+            msg += f"\nChanges:\n{body}"
+        msg += "\n\nWould you like to install the update?"
+
+        nvda_speak(f"New mod version available: {tag}. You have {installed_version}.")
+        result = wx.MessageBox(msg, "Mod Update Available", wx.YES_NO | wx.ICON_INFORMATION, self)
+        if result == wx.YES:
+            self.on_install(None)
 
     def log(self, message):
         """Append a message to the log area (thread-safe)."""
@@ -305,10 +406,25 @@ class InstallerFrame(wx.Frame):
         thread.start()
 
     def install(self, x64_dir):
-        """Download files from GitHub and install."""
+        """Download files from GitHub release and install."""
         errors = []
         copied = 0
         installer_dir = get_installer_dir()
+        installed_tag = None
+
+        # Get release info (use cached if available from update check)
+        tag, assets, body = None, None, None
+        if self.latest_release:
+            tag, assets, body = self.latest_release
+        else:
+            self.log("Fetching latest release...")
+            tag, assets, body = get_latest_mod_release()
+
+        if tag:
+            self.log(f"Installing mod version {tag}...")
+            installed_tag = tag
+        else:
+            self.log("Warning: Could not find latest release. Downloading from main branch...")
 
         try:
             # Download and install DLL files
@@ -316,7 +432,10 @@ class InstallerFrame(wx.Frame):
                 try:
                     self.log(f"Downloading {filename}...")
                     dest = os.path.join(x64_dir, filename)
-                    download_url = GITHUB_RAW_BASE + filename
+                    if assets and filename in assets:
+                        download_url = assets[filename]
+                    else:
+                        download_url = GITHUB_RAW_BASE + filename
                     urllib.request.urlretrieve(download_url, dest)
                     copied += 1
                     self.log(f"  {filename} installed.")
@@ -338,7 +457,11 @@ class InstallerFrame(wx.Frame):
                 try:
                     self.log("Saving readme...")
                     dest = os.path.join(installer_dir, README_FILE)
-                    urllib.request.urlretrieve(GITHUB_RAW_BASE + README_FILE, dest)
+                    if assets and README_FILE in assets:
+                        download_url = assets[README_FILE]
+                    else:
+                        download_url = GITHUB_RAW_BASE + README_FILE
+                    urllib.request.urlretrieve(download_url, dest)
                     self.log(f"  Readme saved to {installer_dir}")
                 except Exception as e:
                     msg = f"Failed to save readme: {e}"
@@ -350,7 +473,11 @@ class InstallerFrame(wx.Frame):
                 try:
                     self.log("Saving changelog...")
                     dest = os.path.join(installer_dir, CHANGELOG_FILE)
-                    urllib.request.urlretrieve(GITHUB_RAW_BASE + CHANGELOG_FILE, dest)
+                    if assets and CHANGELOG_FILE in assets:
+                        download_url = assets[CHANGELOG_FILE]
+                    else:
+                        download_url = GITHUB_RAW_BASE + CHANGELOG_FILE
+                    urllib.request.urlretrieve(download_url, dest)
                     self.log(f"  Changelog saved to {installer_dir}")
                 except Exception as e:
                     msg = f"Failed to save changelog: {e}"
@@ -369,6 +496,9 @@ class InstallerFrame(wx.Frame):
                 self.log(f"\nInstallation complete! {copied} files installed to {x64_dir}")
                 self.installed = True
                 self.log_btn.Enable()
+                if installed_tag:
+                    save_installed_mod_version(x64_dir, installed_tag)
+                    self.log(f"Installed version: {installed_tag}")
 
         wx.CallAfter(finish)
 
