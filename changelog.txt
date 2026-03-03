@@ -1,5 +1,8 @@
 Hades Accessibility Mods Installer Changelog
 
+*Version 1.5: Released 03/03/2026
+Installer self-update now replaces the exe in-place instead of creating a new file with the version number in the name.
+
 *Version 1.4: Released 03/03/2026
 Mod releases are now downloaded as a single zip file instead of individual files. This is faster and ensures all files come from the same release.
 The installer automatically extracts the DLL files to the game's x64 folder and optionally saves the readme and changelog.

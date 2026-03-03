@@ -1,5 +1,5 @@
 """
-Hades Accessibility Mods Installer v1.4
+Hades Accessibility Mods Installer v1.5
 Downloads the latest mod files from GitHub and installs them to the Hades game directory.
 """
 
@@ -16,7 +16,7 @@ import tempfile
 import wx
 
 # Installer version
-INSTALLER_VERSION = "1.4"
+INSTALLER_VERSION = "1.5"
 
 # GitHub repo info
 GITHUB_MOD_REPO = "MichaelJohann1/hades-accessibility-mods"
@@ -629,10 +629,12 @@ class InstallerFrame(wx.Frame):
 
 def download_update(download_url, new_version):
     """Download new installer next to the current one.
+    Downloads to a temp name, then schedule_self_replace will swap them.
     Returns the path to the downloaded file, or None on failure.
     """
     installer_dir = get_installer_dir()
-    new_exe_path = os.path.join(installer_dir, f"HadesAccessibilityInstaller_v{new_version}.exe")
+    # Download to a temp name — the batch script will rename it after the old exe exits
+    new_exe_path = os.path.join(installer_dir, "_HadesAccessibilityInstaller_update.exe")
 
     try:
         urllib.request.urlretrieve(download_url, new_exe_path)
@@ -652,19 +654,24 @@ def download_update(download_url, new_version):
         return None
 
 
-def schedule_self_delete():
-    """Schedule deletion of the current exe after the process exits using a batch script."""
+def schedule_self_replace(new_exe_path):
+    """Schedule replacement of the current exe after the process exits.
+    Deletes the old exe, renames the new one to HadesAccessibilityInstaller.exe,
+    then cleans up the batch script.
+    """
     if not getattr(sys, 'frozen', False):
         return
     import subprocess
     current_exe = sys.executable
     installer_dir = os.path.dirname(current_exe)
+    final_name = os.path.join(installer_dir, "HadesAccessibilityInstaller.exe")
     bat_path = os.path.join(installer_dir, "_cleanup.bat")
     try:
         with open(bat_path, "w") as bat:
             bat.write("@echo off\n")
             bat.write("timeout /t 2 /nobreak >nul\n")
             bat.write(f'del /f "{current_exe}"\n')
+            bat.write(f'move /y "{new_exe_path}" "{final_name}"\n')
             bat.write(f'del /f "%~f0"\n')
         subprocess.Popen(
             ["cmd.exe", "/c", bat_path],
@@ -696,11 +703,11 @@ def main():
                 nvda_speak("Download complete.")
                 wx.MessageBox(
                     f"Installer v{new_version} has been downloaded.\n\n"
-                    f"This installer will now close and the old version will be removed.",
+                    f"This installer will now close and be replaced with the new version.",
                     "Update Downloaded",
                     wx.OK | wx.ICON_INFORMATION
                 )
-                schedule_self_delete()
+                schedule_self_replace(new_path)
                 sys.exit(0)
             else:
                 wx.MessageBox(
