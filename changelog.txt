@@ -1,5 +1,8 @@
 Hades Accessibility Mods Installer Changelog
 
+*Version 1.6: Released 03/03/2026
+The installer now detects and removes old legacy mod files during installation. This includes the Content/Mods/ folder, modimporter.py, and mod.log. These files are no longer needed since all mods are now embedded in the DLL, and leaving them behind can cause conflicts such as game freezes from dual ModUtil versions.
+
 *Version 1.5: Released 03/03/2026
 Installer self-update now replaces the exe in-place instead of creating a new file with the version number in the name.
 
