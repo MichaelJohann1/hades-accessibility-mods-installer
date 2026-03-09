@@ -13,10 +13,11 @@ import winreg
 import string
 import zipfile
 import tempfile
+import webbrowser
 import wx
 
 # Installer version
-INSTALLER_VERSION = "1.6"
+INSTALLER_VERSION = "1.7"
 
 # GitHub repo info
 GITHUB_MOD_REPO = "MichaelJohann1/hades-accessibility-mods"
@@ -25,6 +26,8 @@ GITHUB_BRANCH = "main"
 GITHUB_RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_MOD_REPO}/{GITHUB_BRANCH}/"
 GITHUB_MOD_API_RELEASES = f"https://api.github.com/repos/{GITHUB_MOD_REPO}/releases"
 GITHUB_INSTALLER_API_RELEASES = f"https://api.github.com/repos/{GITHUB_INSTALLER_REPO}/releases"
+GITHUB_LICENSE_URL = f"https://github.com/{GITHUB_MOD_REPO}/blob/{GITHUB_BRANCH}/LICENSE.txt"
+GITHUB_ORIGINAL_LICENSE_URL = f"https://github.com/{GITHUB_MOD_REPO}/blob/{GITHUB_BRANCH}/LICENSE-ORIGINAL.txt"
 
 # Files to download and install to x64 folder
 INSTALL_FILES = [
@@ -350,7 +353,15 @@ class InstallerFrame(wx.Frame):
         btn_sizer.Add(self.log_btn, 0, wx.LEFT, 5)
         self.exit_btn = wx.Button(panel, label="Exit")
         btn_sizer.Add(self.exit_btn, 0, wx.LEFT, 5)
-        main_sizer.Add(btn_sizer, 0, wx.LEFT | wx.TOP | wx.BOTTOM, 10)
+        main_sizer.Add(btn_sizer, 0, wx.LEFT | wx.TOP, 10)
+
+        # License buttons
+        license_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.license_btn = wx.Button(panel, label="View License")
+        license_sizer.Add(self.license_btn, 0)
+        self.original_license_btn = wx.Button(panel, label="View Original License")
+        license_sizer.Add(self.original_license_btn, 0, wx.LEFT, 5)
+        main_sizer.Add(license_sizer, 0, wx.LEFT | wx.TOP | wx.BOTTOM, 10)
 
         # Log area (read-only)
         self.log_text = wx.TextCtrl(panel, style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_DONTWRAP, size=(500, 250))
@@ -363,6 +374,8 @@ class InstallerFrame(wx.Frame):
         self.browse_btn.Bind(wx.EVT_BUTTON, self.on_browse)
         self.install_btn.Bind(wx.EVT_BUTTON, self.on_install)
         self.log_btn.Bind(wx.EVT_BUTTON, self.on_open_debug_log_folder)
+        self.license_btn.Bind(wx.EVT_BUTTON, self.on_view_license)
+        self.original_license_btn.Bind(wx.EVT_BUTTON, self.on_view_original_license)
         self.exit_btn.Bind(wx.EVT_BUTTON, self.on_exit)
 
         self.Centre()
@@ -672,6 +685,12 @@ class InstallerFrame(wx.Frame):
             self.log(f"Opened debug log folder: {logs_dir}")
         except Exception as e:
             self.log(f"Error: Failed to open log folder: {e}")
+
+    def on_view_license(self, event):
+        webbrowser.open(GITHUB_LICENSE_URL)
+
+    def on_view_original_license(self, event):
+        webbrowser.open(GITHUB_ORIGINAL_LICENSE_URL)
 
     def on_exit(self, event):
         self.Close()

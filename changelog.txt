@@ -1,5 +1,8 @@
 Hades Accessibility Mods Installer Changelog
 
+*Version 1.7: Released 03/09/2026
+Added "View License" and "View Original License" buttons that open the license files on GitHub in your browser.
+
 *Version 1.6: Released 03/03/2026
 The installer now detects and removes old legacy mod files during installation. This includes the Content/Mods/ folder, modimporter.py, and mod.log. These files are no longer needed since all mods are now embedded in the DLL, and leaving them behind can cause conflicts such as game freezes from dual ModUtil versions.
 
