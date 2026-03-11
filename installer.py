@@ -574,6 +574,7 @@ class InstallerFrame(wx.Frame):
                                 self.log(f"  {lang_count} language files installed.")
 
                         # Extract license files to x64 directory
+                        lic_count = 0
                         for lic_file in [LICENSE_FILE, ORIGINAL_LICENSE_FILE]:
                             zip_path = self._find_in_zip(zip_contents, lic_file)
                             if zip_path:
@@ -581,8 +582,11 @@ class InstallerFrame(wx.Frame):
                                     dest = os.path.join(x64_dir, lic_file)
                                     with zf.open(zip_path) as src, open(dest, "wb") as dst:
                                         dst.write(src.read())
+                                    lic_count += 1
                                 except Exception as e:
                                     self.log(f"  Error installing {lic_file}: {e}")
+                        if lic_count > 0:
+                            self.log(f"  {lic_count} license files installed.")
 
                 except urllib.error.URLError as e:
                     msg = f"Failed to download mod package: {e}"
