@@ -1,5 +1,9 @@
 Hades Accessibility Mods Installer Changelog
 
+*Version 1.8: Released 03/11/2026
+Language files are now automatically installed from the release zip to the game's x64/languages/ folder.
+License files are now installed to the game's x64/ folder and the View License buttons open the local files instead of GitHub.
+
 *Version 1.7: Released 03/09/2026
 Added "View License" and "View Original License" buttons that open the license files on GitHub in your browser.
 

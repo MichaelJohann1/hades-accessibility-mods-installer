@@ -17,7 +17,7 @@ import webbrowser
 import wx
 
 # Installer version
-INSTALLER_VERSION = "1.7"
+INSTALLER_VERSION = "1.8"
 
 # GitHub repo info
 GITHUB_MOD_REPO = "MichaelJohann1/hades-accessibility-mods"
@@ -26,8 +26,8 @@ GITHUB_BRANCH = "main"
 GITHUB_RAW_BASE = f"https://raw.githubusercontent.com/{GITHUB_MOD_REPO}/{GITHUB_BRANCH}/"
 GITHUB_MOD_API_RELEASES = f"https://api.github.com/repos/{GITHUB_MOD_REPO}/releases"
 GITHUB_INSTALLER_API_RELEASES = f"https://api.github.com/repos/{GITHUB_INSTALLER_REPO}/releases"
-GITHUB_LICENSE_URL = f"https://github.com/{GITHUB_MOD_REPO}/blob/{GITHUB_BRANCH}/LICENSE.txt"
-GITHUB_ORIGINAL_LICENSE_URL = f"https://github.com/{GITHUB_MOD_REPO}/blob/{GITHUB_BRANCH}/LICENSE-ORIGINAL.txt"
+LICENSE_FILE = "LICENSE.txt"
+ORIGINAL_LICENSE_FILE = "LICENSE-ORIGINAL.txt"
 
 # Files to download and install to x64 folder
 INSTALL_FILES = [
@@ -555,6 +555,35 @@ class InstallerFrame(wx.Frame):
                                 except Exception as e:
                                     self.log(f"  Error saving changelog: {e}")
 
+                        # Extract language files to x64/languages/
+                        lang_entries = [e for e in zip_contents if "/languages/" in e and e.endswith(".lua")]
+                        if lang_entries:
+                            lang_dir = os.path.join(x64_dir, "languages")
+                            os.makedirs(lang_dir, exist_ok=True)
+                            lang_count = 0
+                            for entry in lang_entries:
+                                fname = entry.rsplit("/", 1)[-1]
+                                try:
+                                    dest = os.path.join(lang_dir, fname)
+                                    with zf.open(entry) as src, open(dest, "wb") as dst:
+                                        dst.write(src.read())
+                                    lang_count += 1
+                                except Exception as e:
+                                    self.log(f"  Error installing language file {fname}: {e}")
+                            if lang_count > 0:
+                                self.log(f"  {lang_count} language files installed.")
+
+                        # Extract license files to x64 directory
+                        for lic_file in [LICENSE_FILE, ORIGINAL_LICENSE_FILE]:
+                            zip_path = self._find_in_zip(zip_contents, lic_file)
+                            if zip_path:
+                                try:
+                                    dest = os.path.join(x64_dir, lic_file)
+                                    with zf.open(zip_path) as src, open(dest, "wb") as dst:
+                                        dst.write(src.read())
+                                except Exception as e:
+                                    self.log(f"  Error installing {lic_file}: {e}")
+
                 except urllib.error.URLError as e:
                     msg = f"Failed to download mod package: {e}"
                     errors.append(msg)
@@ -686,11 +715,31 @@ class InstallerFrame(wx.Frame):
         except Exception as e:
             self.log(f"Error: Failed to open log folder: {e}")
 
+    def _get_x64_dir(self):
+        if self.game_x64_dir:
+            return self.game_x64_dir
+        game_dir = self.dir_text.GetValue().strip()
+        if game_dir:
+            return os.path.join(game_dir, "x64")
+        return ""
+
     def on_view_license(self, event):
-        webbrowser.open(GITHUB_LICENSE_URL)
+        x64 = self._get_x64_dir()
+        if x64:
+            path = os.path.join(x64, LICENSE_FILE)
+            if os.path.isfile(path):
+                os.startfile(path)
+                return
+        self.log("License file not found. Install the mods first.")
 
     def on_view_original_license(self, event):
-        webbrowser.open(GITHUB_ORIGINAL_LICENSE_URL)
+        x64 = self._get_x64_dir()
+        if x64:
+            path = os.path.join(x64, ORIGINAL_LICENSE_FILE)
+            if os.path.isfile(path):
+                os.startfile(path)
+                return
+        self.log("Original license file not found. Install the mods first.")
 
     def on_exit(self, event):
         self.Close()
