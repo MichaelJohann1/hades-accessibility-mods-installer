@@ -1,5 +1,5 @@
 """
-Hades Accessibility Mods Installer v1.6
+Hades Accessibility Mods Installer v1.9
 Downloads the latest mod files from GitHub and installs them to the Hades game directory.
 """
 
@@ -17,7 +17,7 @@ import webbrowser
 import wx
 
 # Installer version
-INSTALLER_VERSION = "1.8"
+INSTALLER_VERSION = "1.9"
 
 # GitHub repo info
 GITHUB_MOD_REPO = "MichaelJohann1/hades-accessibility-mods"
@@ -572,6 +572,24 @@ class InstallerFrame(wx.Frame):
                                     self.log(f"  Error installing language file {fname}: {e}")
                             if lang_count > 0:
                                 self.log(f"  {lang_count} language files installed.")
+
+                        # Extract subtitle files to x64/subtitles/
+                        sub_entries = [e for e in zip_contents if "/subtitles/" in e and e.endswith(".lua")]
+                        if sub_entries:
+                            sub_dir = os.path.join(x64_dir, "subtitles")
+                            os.makedirs(sub_dir, exist_ok=True)
+                            sub_count = 0
+                            for entry in sub_entries:
+                                fname = entry.rsplit("/", 1)[-1]
+                                try:
+                                    dest = os.path.join(sub_dir, fname)
+                                    with zf.open(entry) as src, open(dest, "wb") as dst:
+                                        dst.write(src.read())
+                                    sub_count += 1
+                                except Exception as e:
+                                    self.log(f"  Error installing subtitle file {fname}: {e}")
+                            if sub_count > 0:
+                                self.log(f"  {sub_count} subtitle files installed.")
 
                         # Extract license files to x64 directory
                         lic_count = 0
